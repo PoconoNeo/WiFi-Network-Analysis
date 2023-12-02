@@ -1,0 +1,158 @@
+<!--
+    WiFi Network Analysis Tool
+    This HTML file works in conjunction with the Wi-Fi-Analyser.ps1 PowerShell script.
+    It displays a table of the current state of WiFi networks and historical charts
+    for each SSID's signal strength over time.
+
+    Usage:
+    - Run the Wi-Fi-Analyser.ps1 script to collect WiFi data.
+    - Open this file in a web browser to view the data visualization.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WiFi Network Analysis</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .container {
+            margin: 10px;
+        }
+        .chart {
+            height: 400px;
+            margin-top: 30px;
+        }
+        .clickable-row {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WiFi Network Analysis</h1>
+        <table class="table table-bordered table-hover" id="wifiTable">
+            <thead class="thead-dark">
+                <tr>
+                    <th>SSID</th>
+                    <th>Signal Strength</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data will be loaded here -->
+            </tbody>
+        </table>
+        <div id="chartContainer">
+            <!-- Chart will be loaded here -->
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        async function loadData() {
+            try {
+                const response = await fetch('data.json?' + new Date().getTime());
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+
+            if (date.toLocaleDateString() === now.toLocaleDateString()) {
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else if (date.getFullYear() === now.getFullYear()) {
+                return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } else {
+                return date.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            }
+        }
+
+         function updateTable(data) {
+            const tableBody = document.getElementById('wifiTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+
+            // Group data by SSID and get the latest entry for each
+            const latestDataBySSID = data.reduce((acc, item) => {
+                acc[item.SSID] = item;
+                return acc;
+            }, {});
+
+            // Create arrays for active and inactive SSIDs
+            const activeSSIDs = [];
+            const inactiveSSIDs = [];
+            for (const ssid in latestDataBySSID) {
+                const ssidData = latestDataBySSID[ssid];
+                (ssidData.Active ? activeSSIDs : inactiveSSIDs).push(ssidData);
+            }
+
+            // Sort active SSIDs by signal strength and inactive SSIDs by name
+            activeSSIDs.sort((a, b) => b.Signal - a.Signal);
+            inactiveSSIDs.sort((a, b) => a.SSID.localeCompare(b.SSID));
+
+            // Combine active and inactive SSIDs
+            const sortedData = [...activeSSIDs, ...inactiveSSIDs];
+
+            sortedData.forEach(item => {
+                let row = tableBody.insertRow();
+                let cellSSID = row.insertCell(0);
+                let cellSignal = row.insertCell(1);
+                let cellStatus = row.insertCell(2);
+                cellSSID.innerHTML = item.SSID;
+                cellSignal.innerHTML = item.Signal;
+                cellStatus.innerHTML = item.Active ? 'Active' : 'Inactive';
+            });
+
+            // Make each SSID row clickable - Correct placement
+            const rows = tableBody.getElementsByTagName('tr');
+            for (let row of rows) {
+                row.classList.add('clickable-row');
+                row.addEventListener('click', () => {
+                    const ssid = row.cells[0].innerText;
+                    createChartForSSID(data, ssid);
+                });
+            }
+        }
+
+        function createChartForSSID(data, ssid) {
+            const filteredData = data.filter(item => item.SSID === ssid);
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'chart';
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.innerHTML = ''; // Clear previous chart
+            chartContainer.appendChild(canvas);
+
+            const ctx = canvas.getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: filteredData.map(d => formatTimestamp(d.Timestamp)),
+                    datasets: [{
+                        label: ssid + ' Signal Strength Over Time',
+                        data: filteredData.map(d => d.Signal),
+                        fill: false,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        loadData().then(data => {
+            if (data && data.length) {
+                updateTable(data);
+            }
+        });
+    </script>
+</body>
+</html>
