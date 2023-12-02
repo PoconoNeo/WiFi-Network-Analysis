@@ -20,7 +20,7 @@ This script requires PowerShell 5.1 or later and a compatible WiFi adapter.
 
 # Script parameters and initialization
 $Delay = 5
-$DataPath = ".\data.json"
+$DataPath = ".\Website\data.json"
 
 $AllData = @()
 
